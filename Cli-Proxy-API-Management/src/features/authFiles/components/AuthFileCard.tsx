@@ -59,6 +59,11 @@ const resolveQuotaType = (file: AuthFileItem): QuotaProviderType | null => {
   return provider as QuotaProviderType;
 };
 
+const resolveProxyURL = (file: AuthFileItem): string => {
+  const value = file['proxy_url'] ?? file.proxyUrl;
+  return typeof value === 'string' ? value.trim() : '';
+};
+
 export function AuthFileCard(props: AuthFileCardProps) {
   const { t } = useTranslation();
   const {
@@ -116,6 +121,8 @@ export function AuthFileCard(props: AuthFileCardProps) {
 
   const priorityValue = parsePriorityValue(file.priority ?? file['priority']);
   const noteValue = typeof file.note === 'string' ? file.note.trim() : '';
+  const proxyURL = resolveProxyURL(file);
+  const proxyEnabled = proxyURL.length > 0;
   const stateLabel = isRuntimeOnly
     ? t('auth_files.type_virtual') || '虚拟认证文件'
     : file.disabled
@@ -180,6 +187,16 @@ export function AuthFileCard(props: AuthFileCardProps) {
                   {typeLabel}
                 </span>
                 <span className={`${styles.stateBadge} ${stateBadgeClass}`}>{stateLabel}</span>
+                <span
+                  className={`${styles.stateBadge} ${
+                    proxyEnabled ? styles.stateBadgeProxyActive : styles.stateBadgeProxyInactive
+                  }`}
+                  title={proxyEnabled ? proxyURL : t('auth_files.proxy_status_disabled')}
+                >
+                  {proxyEnabled
+                    ? t('auth_files.proxy_status_enabled')
+                    : t('auth_files.proxy_status_disabled')}
+                </span>
               </div>
               <span className={styles.fileName} title={file.name}>
                 {file.name}

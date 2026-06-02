@@ -558,6 +558,8 @@
     "models_excluded_badge": "Disabled",
     "models_excluded_hint": "This OAuth model is disabled",
     "status_toggle_label": "Enabled",
+    "proxy_status_enabled": "Proxy enabled",
+    "proxy_status_disabled": "Proxy disabled",
     "status_enabled_success": "\"{{name}}\" enabled",
     "status_disabled_success": "\"{{name}}\" disabled",
     "batch_status_success": "{{count}} files updated successfully",

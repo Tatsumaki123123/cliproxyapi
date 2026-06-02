@@ -910,6 +910,18 @@
   border: 1px dashed color-mix(in srgb, var(--border-primary) 90%, transparent);
 }
 
+.stateBadgeProxyActive {
+  color: #0f766e;
+  background: color-mix(in srgb, #ccfbf1 78%, var(--bg-primary));
+  border: 1px solid color-mix(in srgb, #2dd4bf 72%, var(--border-color));
+}
+
+.stateBadgeProxyInactive {
+  color: var(--text-tertiary);
+  background: color-mix(in srgb, var(--bg-tertiary) 72%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-color) 86%, transparent);
+}
+
 .fileName {
   font-size: 14px;
   font-weight: 800;

@@ -558,6 +558,8 @@
     "models_excluded_badge": "Отключена",
     "models_excluded_hint": "Эта OAuth-модель отключена",
     "status_toggle_label": "Включено",
+    "proxy_status_enabled": "Прокси включён",
+    "proxy_status_disabled": "Прокси отключён",
     "status_enabled_success": "\"{{name}}\" включён",
     "status_disabled_success": "\"{{name}}\" отключён",
     "batch_status_success": "{{count}} файлов обновлено",

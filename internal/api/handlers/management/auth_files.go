@@ -334,8 +334,12 @@ func (h *Handler) listAuthFilesFromDisk(c *gin.Context) {
 			if data, errRead := os.ReadFile(full); errRead == nil {
 				typeValue := gjson.GetBytes(data, "type").String()
 				emailValue := gjson.GetBytes(data, "email").String()
+				proxyURLValue := strings.TrimSpace(gjson.GetBytes(data, "proxy_url").String())
 				fileData["type"] = typeValue
 				fileData["email"] = emailValue
+				if proxyURLValue != "" {
+					fileData["proxy_url"] = proxyURLValue
+				}
 				if pv := gjson.GetBytes(data, "priority"); pv.Exists() {
 					switch pv.Type {
 					case gjson.Number:
@@ -411,6 +415,15 @@ func (h *Handler) buildAuthFileEntry(auth *coreauth.Auth) gin.H {
 	}
 	if !auth.LastRefreshedAt.IsZero() {
 		entry["last_refresh"] = auth.LastRefreshedAt
+	}
+	if proxyURL := strings.TrimSpace(auth.ProxyURL); proxyURL != "" {
+		entry["proxy_url"] = proxyURL
+	} else if auth.Metadata != nil {
+		if rawProxyURL, ok := auth.Metadata["proxy_url"].(string); ok {
+			if trimmed := strings.TrimSpace(rawProxyURL); trimmed != "" {
+				entry["proxy_url"] = trimmed
+			}
+		}
 	}
 	if !auth.NextRetryAfter.IsZero() {
 		entry["next_retry_after"] = auth.NextRetryAfter

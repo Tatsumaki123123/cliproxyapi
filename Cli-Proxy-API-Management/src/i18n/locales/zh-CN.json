@@ -558,6 +558,8 @@
     "models_excluded_badge": "已禁用",
     "models_excluded_hint": "此 OAuth 模型已被禁用",
     "status_toggle_label": "启用",
+    "proxy_status_enabled": "代理已启用",
+    "proxy_status_disabled": "代理未启用",
     "status_enabled_success": "已启用 \"{{name}}\"",
     "status_disabled_success": "已停用 \"{{name}}\"",
     "batch_status_success": "已成功更新 {{count}} 个文件",
