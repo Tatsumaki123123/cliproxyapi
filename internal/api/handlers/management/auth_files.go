@@ -334,9 +334,13 @@ func (h *Handler) listAuthFilesFromDisk(c *gin.Context) {
 			if data, errRead := os.ReadFile(full); errRead == nil {
 				typeValue := gjson.GetBytes(data, "type").String()
 				emailValue := gjson.GetBytes(data, "email").String()
+				accountIDValue := strings.TrimSpace(gjson.GetBytes(data, "account_id").String())
 				proxyURLValue := strings.TrimSpace(gjson.GetBytes(data, "proxy_url").String())
 				fileData["type"] = typeValue
 				fileData["email"] = emailValue
+				if accountIDValue != "" {
+					fileData["account_id"] = accountIDValue
+				}
 				if proxyURLValue != "" {
 					fileData["proxy_url"] = proxyURLValue
 				}
@@ -447,6 +451,9 @@ func (h *Handler) buildAuthFileEntry(auth *coreauth.Auth) gin.H {
 	if claims := extractCodexIDTokenClaims(auth); claims != nil {
 		entry["id_token"] = claims
 	}
+	if accountID := codexAccountID(auth); accountID != "" {
+		entry["account_id"] = accountID
+	}
 	// Expose priority from Attributes (set by synthesizer from JSON "priority" field).
 	// Fall back to Metadata for auths registered via UploadAuthFile (no synthesizer).
 	if p := strings.TrimSpace(authAttribute(auth, "priority")); p != "" {
@@ -519,6 +526,34 @@ func extractCodexIDTokenClaims(auth *coreauth.Auth) gin.H {
 		return nil
 	}
 	return result
+}
+
+func codexAccountID(auth *coreauth.Auth) string {
+	if auth == nil || !strings.EqualFold(strings.TrimSpace(auth.Provider), "codex") {
+		return ""
+	}
+	if auth.Metadata != nil {
+		for _, key := range []string{"account_id", "chatgpt_account_id", "chatgptAccountId"} {
+			if v, ok := auth.Metadata[key].(string); ok {
+				if trimmed := strings.TrimSpace(v); trimmed != "" {
+					return trimmed
+				}
+			}
+		}
+		if idTokenRaw, ok := auth.Metadata["id_token"].(string); ok {
+			if claims, err := codex.ParseJWTToken(strings.TrimSpace(idTokenRaw)); err == nil && claims != nil {
+				return strings.TrimSpace(claims.CodexAuthInfo.ChatgptAccountID)
+			}
+		}
+	}
+	if auth.Attributes != nil {
+		for _, key := range []string{"account_id", "chatgpt_account_id", "chatgptAccountId"} {
+			if trimmed := strings.TrimSpace(auth.Attributes[key]); trimmed != "" {
+				return trimmed
+			}
+		}
+	}
+	return ""
 }
 
 func authEmail(auth *coreauth.Auth) string {

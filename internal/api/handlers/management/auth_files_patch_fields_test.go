@@ -15,10 +15,10 @@ import (
 	coreauth "github.com/router-for-me/CLIProxyAPI/v6/sdk/cliproxy/auth"
 )
 
-func TestBuildAuthFileEntryExposesProxyURL(t *testing.T) {
+func TestBuildAuthFileEntryExposesMetadataFields(t *testing.T) {
 	authDir := t.TempDir()
 	authPath := filepath.Join(authDir, "proxied.json")
-	if errWrite := os.WriteFile(authPath, []byte(`{"type":"claude"}`), 0o600); errWrite != nil {
+	if errWrite := os.WriteFile(authPath, []byte(`{"type":"codex"}`), 0o600); errWrite != nil {
 		t.Fatalf("failed to write auth file: %v", errWrite)
 	}
 
@@ -26,10 +26,13 @@ func TestBuildAuthFileEntryExposesProxyURL(t *testing.T) {
 	entry := h.buildAuthFileEntry(&coreauth.Auth{
 		ID:       "proxied.json",
 		FileName: "proxied.json",
-		Provider: "claude",
+		Provider: "codex",
 		ProxyURL: "http://proxy.local",
 		Attributes: map[string]string{
 			"path": authPath,
+		},
+		Metadata: map[string]any{
+			"account_id": "acct_123",
 		},
 	})
 
@@ -38,6 +41,9 @@ func TestBuildAuthFileEntryExposesProxyURL(t *testing.T) {
 	}
 	if got, _ := entry["proxy_url"].(string); got != "http://proxy.local" {
 		t.Fatalf("proxy_url = %q, want %q", got, "http://proxy.local")
+	}
+	if got, _ := entry["account_id"].(string); got != "acct_123" {
+		t.Fatalf("account_id = %q, want %q", got, "acct_123")
 	}
 }
 

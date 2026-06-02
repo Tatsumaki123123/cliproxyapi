@@ -28,6 +28,7 @@ export interface AuthFileItem {
   unavailable?: boolean;
   status?: string;
   statusMessage?: string;
+  accountId?: string;
   proxyUrl?: string;
   lastRefresh?: string | number;
   modified?: number;
