@@ -15,6 +15,7 @@ services:
     environment:
       DEPLOY: ${DEPLOY:-production}
       TZ: ${TZ:-Asia/Shanghai}
+      MANAGEMENT_STATIC_PATH: /CLIProxyAPI/static
     ports:
       - "8317:8317"   # 主 API 端口
       - "8085:8085"   # 管理面板端口（可选）
@@ -29,6 +30,7 @@ services:
       - ${CLI_PROXY_AUTH_PATH:-./auths}:/root/.cli-proxy-api:rw
       # 日志目录（读写）
       - ${CLI_PROXY_LOG_PATH:-./logs}:/CLIProxyAPI/logs:rw
+      - ./static:/CLIProxyAPI/static:ro
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8317/health"]
