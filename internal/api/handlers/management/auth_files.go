@@ -32,6 +32,7 @@ import (
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/auth/qwen"
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/interfaces"
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/misc"
+	"github.com/router-for-me/CLIProxyAPI/v6/internal/proxypool"
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/registry"
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/util"
 	sdkAuth "github.com/router-for-me/CLIProxyAPI/v6/sdk/auth"
@@ -642,7 +643,8 @@ func (h *Handler) UploadAuthFile(c *gin.Context) {
 		return
 	}
 	if len(fileHeaders) == 1 {
-		if _, errUpload := h.storeUploadedAuthFile(ctx, fileHeaders[0]); errUpload != nil {
+		assignRandomProxy := !isTruthyQuery(c.Query("skip_auto_proxy"))
+		if _, errUpload := h.storeUploadedAuthFile(ctx, fileHeaders[0], assignRandomProxy); errUpload != nil {
 			if errors.Is(errUpload, errAuthFileMustBeJSON) {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "file must be .json"})
 				return
@@ -656,8 +658,9 @@ func (h *Handler) UploadAuthFile(c *gin.Context) {
 	if len(fileHeaders) > 1 {
 		uploaded := make([]string, 0, len(fileHeaders))
 		failed := make([]gin.H, 0)
+		assignRandomProxy := !isTruthyQuery(c.Query("skip_auto_proxy"))
 		for _, file := range fileHeaders {
-			name, errUpload := h.storeUploadedAuthFile(ctx, file)
+			name, errUpload := h.storeUploadedAuthFile(ctx, file, assignRandomProxy)
 			if errUpload != nil {
 				failureName := ""
 				if file != nil {
@@ -702,7 +705,8 @@ func (h *Handler) UploadAuthFile(c *gin.Context) {
 		c.JSON(400, gin.H{"error": "failed to read body"})
 		return
 	}
-	if err = h.writeAuthFile(ctx, filepath.Base(name), data); err != nil {
+	assignRandomProxy := !isTruthyQuery(c.Query("skip_auto_proxy"))
+	if err = h.writeAuthFile(ctx, filepath.Base(name), data, assignRandomProxy); err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
@@ -815,7 +819,7 @@ func (h *Handler) multipartAuthFileHeaders(c *gin.Context) ([]*multipart.FileHea
 	return headers, nil
 }
 
-func (h *Handler) storeUploadedAuthFile(ctx context.Context, file *multipart.FileHeader) (string, error) {
+func (h *Handler) storeUploadedAuthFile(ctx context.Context, file *multipart.FileHeader, assignRandomProxy bool) (string, error) {
 	if file == nil {
 		return "", fmt.Errorf("no file uploaded")
 	}
@@ -833,17 +837,24 @@ func (h *Handler) storeUploadedAuthFile(ctx context.Context, file *multipart.Fil
 	if err != nil {
 		return "", fmt.Errorf("failed to read uploaded file: %w", err)
 	}
-	if err := h.writeAuthFile(ctx, name, data); err != nil {
+	if err := h.writeAuthFile(ctx, name, data, assignRandomProxy); err != nil {
 		return "", err
 	}
 	return name, nil
 }
 
-func (h *Handler) writeAuthFile(ctx context.Context, name string, data []byte) error {
+func (h *Handler) writeAuthFile(ctx context.Context, name string, data []byte, assignRandomProxy bool) error {
 	dst := filepath.Join(h.cfg.AuthDir, filepath.Base(name))
 	if !filepath.IsAbs(dst) {
 		if abs, errAbs := filepath.Abs(dst); errAbs == nil {
 			dst = abs
+		}
+	}
+	if assignRandomProxy {
+		if updated, _, ok, errProxy := withRandomProxyURL(data); errProxy != nil {
+			return errProxy
+		} else if ok {
+			data = updated
 		}
 	}
 	auth, err := h.buildAuthFromFileData(dst, data)
@@ -857,6 +868,35 @@ func (h *Handler) writeAuthFile(ctx context.Context, name string, data []byte) e
 		return err
 	}
 	return nil
+}
+
+func withRandomProxyURL(data []byte) ([]byte, string, bool, error) {
+	proxyURL, ok := proxypool.RandomProxyURL()
+	if !ok {
+		log.Debug("skip auth upload proxy assignment: webshare proxy pool is empty")
+		return data, "", false, nil
+	}
+
+	var metadata map[string]any
+	if err := json.Unmarshal(data, &metadata); err != nil {
+		return nil, "", false, fmt.Errorf("invalid auth file: %w", err)
+	}
+	metadata["proxy_url"] = proxyURL
+	updated, err := json.MarshalIndent(metadata, "", "  ")
+	if err != nil {
+		return nil, "", false, fmt.Errorf("marshal auth file with proxy_url: %w", err)
+	}
+	updated = append(updated, '\n')
+	return updated, proxyURL, true, nil
+}
+
+func isTruthyQuery(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
 }
 
 func requestedAuthFileNamesForDelete(c *gin.Context) ([]string, error) {
@@ -1087,6 +1127,7 @@ func (h *Handler) buildAuthFromFileData(path string, data []byte) (*coreauth.Aut
 		}
 	}
 	coreauth.ApplyCustomHeadersFromMetadata(auth)
+	coreauth.ApplyProxyURLFromMetadata(auth)
 	return auth, nil
 }
 
@@ -1362,6 +1403,116 @@ func (h *Handler) PatchAuthFileFields(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
+
+// PatchAuthFileRandomProxy assigns a random proxy from the in-memory proxy pool to an auth file.
+func (h *Handler) PatchAuthFileRandomProxy(c *gin.Context) {
+	if h.authManager == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "core auth manager unavailable"})
+		return
+	}
+
+	var req struct {
+		Name string `json:"name"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "name is required"})
+		return
+	}
+
+	proxyURL, ok := proxypool.RandomProxyURL()
+	if !ok {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "proxy pool is empty"})
+		return
+	}
+
+	ctx := c.Request.Context()
+	targetAuth := h.findAuthByName(name)
+	if targetAuth == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "auth file not found"})
+		return
+	}
+
+	targetAuth.ProxyURL = proxyURL
+	if targetAuth.Metadata == nil {
+		targetAuth.Metadata = make(map[string]any)
+	}
+	targetAuth.Metadata["proxy_url"] = proxyURL
+	targetAuth.UpdatedAt = time.Now()
+
+	if _, err := h.authManager.Update(ctx, targetAuth); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to update auth: %v", err)})
+		return
+	}
+	if err := h.updateAuthFileProxyURLOnDisk(targetAuth, name, proxyURL); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	responseName := strings.TrimSpace(targetAuth.FileName)
+	if responseName == "" {
+		responseName = name
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "ok", "name": responseName, "proxy_url": proxyURL})
+}
+
+func (h *Handler) findAuthByName(name string) *coreauth.Auth {
+	if h == nil || h.authManager == nil {
+		return nil
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil
+	}
+	if auth, ok := h.authManager.GetByID(name); ok {
+		return auth
+	}
+	auths := h.authManager.List()
+	for _, auth := range auths {
+		if auth.FileName == name {
+			return auth
+		}
+	}
+	return nil
+}
+
+func (h *Handler) updateAuthFileProxyURLOnDisk(auth *coreauth.Auth, requestedName, proxyURL string) error {
+	path := strings.TrimSpace(authAttribute(auth, "path"))
+	if path == "" {
+		fileName := strings.TrimSpace(requestedName)
+		if auth != nil && strings.TrimSpace(auth.FileName) != "" {
+			fileName = strings.TrimSpace(auth.FileName)
+		}
+		if isUnsafeAuthFileName(fileName) || !strings.HasSuffix(strings.ToLower(fileName), ".json") {
+			return nil
+		}
+		path = filepath.Join(h.cfg.AuthDir, filepath.Base(fileName))
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("failed to read auth file: %w", err)
+	}
+	var metadata map[string]any
+	if err := json.Unmarshal(data, &metadata); err != nil {
+		return fmt.Errorf("invalid auth file: %w", err)
+	}
+	metadata["proxy_url"] = proxyURL
+	updated, err := json.MarshalIndent(metadata, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal auth file with proxy_url: %w", err)
+	}
+	updated = append(updated, '\n')
+	if err := os.WriteFile(path, updated, 0o600); err != nil {
+		return fmt.Errorf("failed to write auth file: %w", err)
+	}
+	return nil
 }
 
 func (h *Handler) disableAuth(ctx context.Context, id string) {

@@ -30,6 +30,7 @@ export type UseAuthFilesDataResult = {
   deleting: string | null;
   deletingAll: boolean;
   statusUpdating: Record<string, boolean>;
+  proxyUpdating: Record<string, boolean>;
   batchStatusUpdating: boolean;
   fileInputRef: RefObject<HTMLInputElement | null>;
   loadFiles: () => Promise<void>;
@@ -39,6 +40,7 @@ export type UseAuthFilesDataResult = {
   handleDeleteAll: (options: DeleteAllOptions) => void;
   handleDownload: (name: string) => Promise<void>;
   handleStatusToggle: (item: AuthFileItem, enabled: boolean) => Promise<void>;
+  handleAssignRandomProxy: (item: AuthFileItem) => Promise<void>;
   toggleSelect: (name: string) => void;
   selectAllVisible: (visibleFiles: AuthFileItem[]) => void;
   invertVisibleSelection: (visibleFiles: AuthFileItem[]) => void;
@@ -64,6 +66,7 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFiles
   const [deleting, setDeleting] = useState<string | null>(null);
   const [deletingAll, setDeletingAll] = useState(false);
   const [statusUpdating, setStatusUpdating] = useState<Record<string, boolean>>({});
+  const [proxyUpdating, setProxyUpdating] = useState<Record<string, boolean>>({});
   const [batchStatusUpdating, setBatchStatusUpdating] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
 
@@ -435,6 +438,36 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFiles
     [showNotification, t]
   );
 
+  const handleAssignRandomProxy = useCallback(
+    async (item: AuthFileItem) => {
+      const name = item.name;
+      if (!name || proxyUpdating[name] === true) return;
+
+      setProxyUpdating((prev) => ({ ...prev, [name]: true }));
+      try {
+        const res = await authFilesApi.assignRandomProxy(name);
+        const proxyUrl = typeof res.proxy_url === 'string' ? res.proxy_url : '';
+        setFiles((prev) =>
+          prev.map((file) =>
+            file.name === name ? { ...file, proxyUrl, proxy_url: proxyUrl } : file
+          )
+        );
+        showNotification(t('auth_files.assign_random_proxy_success', { name }), 'success');
+      } catch (err: unknown) {
+        const errorMessage = err instanceof Error ? err.message : '';
+        showNotification(`${t('notification.update_failed')}: ${errorMessage}`, 'error');
+      } finally {
+        setProxyUpdating((prev) => {
+          if (!prev[name]) return prev;
+          const next = { ...prev };
+          delete next[name];
+          return next;
+        });
+      }
+    },
+    [proxyUpdating, showNotification, t]
+  );
+
   const batchSetStatus = useCallback(
     async (names: string[], enabled: boolean) => {
       if (batchStatusPendingRef.current) return;
@@ -614,6 +647,7 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFiles
     deleting,
     deletingAll,
     statusUpdating,
+    proxyUpdating,
     batchStatusUpdating,
     fileInputRef,
     loadFiles,
@@ -623,6 +657,7 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFiles
     handleDeleteAll,
     handleDownload,
     handleStatusToggle,
+    handleAssignRandomProxy,
     toggleSelect,
     selectAllVisible,
     invertVisibleSelection,

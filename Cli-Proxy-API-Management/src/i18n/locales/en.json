@@ -560,6 +560,8 @@
     "status_toggle_label": "Enabled",
     "proxy_status_enabled": "Proxy enabled",
     "proxy_status_disabled": "Proxy disabled",
+    "assign_random_proxy_button": "Assign random proxy",
+    "assign_random_proxy_success": "Assigned a proxy to \"{{name}}\"",
     "status_enabled_success": "\"{{name}}\" enabled",
     "status_disabled_success": "\"{{name}}\" disabled",
     "batch_status_success": "{{count}} files updated successfully",

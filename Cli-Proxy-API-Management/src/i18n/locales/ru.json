@@ -560,6 +560,8 @@
     "status_toggle_label": "Включено",
     "proxy_status_enabled": "Прокси включён",
     "proxy_status_disabled": "Прокси отключён",
+    "assign_random_proxy_button": "Назначить случайный прокси",
+    "assign_random_proxy_success": "Прокси назначен для \"{{name}}\"",
     "status_enabled_success": "\"{{name}}\" включён",
     "status_disabled_success": "\"{{name}}\" отключён",
     "batch_status_success": "{{count}} файлов обновлено",

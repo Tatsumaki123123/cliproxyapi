@@ -8,6 +8,7 @@ import type { OAuthModelAliasEntry } from '@/types';
 
 type StatusError = { status?: number };
 type AuthFileStatusResponse = { status: string; disabled: boolean };
+type AuthFileRandomProxyResponse = { status: string; name: string; proxy_url: string };
 type AuthFileEntry = AuthFilesResponse['files'][number];
 type AuthFileBatchFailure = { name: string; error: string };
 type AuthFileBatchUploadResponse = {
@@ -301,7 +302,9 @@ const parseAuthFileJsonObject = (rawText: string): Record<string, unknown> => {
 
 const saveAuthFileText = async (name: string, text: string) => {
   const file = new File([text], name, { type: 'application/json' });
-  await authFilesApi.upload(file);
+  const formData = new FormData();
+  formData.append('file', file, name);
+  await apiClient.postForm('/auth-files?skip_auto_proxy=1', formData);
 };
 
 export const isAuthFileInvalidJsonObjectError = (err: unknown): boolean =>
@@ -399,6 +402,9 @@ export const authFilesApi = {
 
   setStatus: (name: string, disabled: boolean) =>
     apiClient.patch<AuthFileStatusResponse>('/auth-files/status', { name, disabled }),
+
+  assignRandomProxy: (name: string) =>
+    apiClient.patch<AuthFileRandomProxyResponse>('/auth-files/random-proxy', { name }),
 
   uploadFiles: async (files: File[]): Promise<AuthFileBatchUploadResult> => {
     const requestedNames = files.map((file) => file.name);

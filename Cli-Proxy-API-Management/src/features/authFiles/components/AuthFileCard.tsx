@@ -7,6 +7,7 @@ import {
   IconDownload,
   IconInfo,
   IconModelCluster,
+  IconRefreshCw,
   IconSettings,
   IconTrash2,
 } from '@/components/ui/icons';
@@ -42,12 +43,14 @@ export type AuthFileCardProps = {
   disableControls: boolean;
   deleting: string | null;
   statusUpdating: Record<string, boolean>;
+  proxyUpdating: Record<string, boolean>;
   quotaFilterType: QuotaProviderType | null;
   keyStats: KeyStats;
   statusBarCache: Map<string, AuthFileStatusBarData>;
   onShowModels: (file: AuthFileItem) => void;
   onDownload: (name: string) => void;
   onOpenPrefixProxyEditor: (file: AuthFileItem) => void;
+  onAssignRandomProxy: (file: AuthFileItem) => void;
   onDelete: (name: string) => void;
   onToggleStatus: (file: AuthFileItem, enabled: boolean) => void;
   onToggleSelect: (name: string) => void;
@@ -74,12 +77,14 @@ export function AuthFileCard(props: AuthFileCardProps) {
     disableControls,
     deleting,
     statusUpdating,
+    proxyUpdating,
     quotaFilterType,
     keyStats,
     statusBarCache,
     onShowModels,
     onDownload,
     onOpenPrefixProxyEditor,
+    onAssignRandomProxy,
     onDelete,
     onToggleStatus,
     onToggleSelect,
@@ -308,6 +313,20 @@ export function AuthFileCard(props: AuthFileCardProps) {
                     disabled={disableControls}
                   >
                     <IconSettings className={styles.actionIcon} size={16} />
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => onAssignRandomProxy(file)}
+                    className={styles.iconButton}
+                    title={t('auth_files.assign_random_proxy_button')}
+                    disabled={disableControls || proxyUpdating[file.name] === true}
+                  >
+                    {proxyUpdating[file.name] === true ? (
+                      <LoadingSpinner size={14} />
+                    ) : (
+                      <IconRefreshCw className={styles.actionIcon} size={16} />
+                    )}
                   </Button>
                   <Button
                     variant="danger"
